@@ -221,6 +221,7 @@ async function handleAnnotateClick() {
 
     const response = await sendMessageToTab(tab.id, {
       type: popupCore.MESSAGE_TYPES.START_ANNOTATION,
+      directTranslate: true,
     });
 
     if (!response || !response.ok) {

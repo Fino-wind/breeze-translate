@@ -2,7 +2,7 @@ const contentCore = globalThis.NanFengCore;
 const trackedBlocks = new Map();
 let activeRunId = 0;
 
-const CANDIDATE_SELECTOR = 'article, main, section, blockquote, p, li, td, th, figcaption, h1, h2, h3, h4, h5, h6';
+const CANDIDATE_SELECTOR = 'article, main, section, blockquote, p, li, td, th, figcaption, h1, h2, h3, h4, h5, h6, div, dd, dt, details, summary';
 const BLOCKED_SELECTOR = 'script, style, code, pre, textarea, input, noscript, button, nav, svg, canvas, video, audio';
 const MAX_BATCH_SIZE = 8;
 const MAX_BATCH_CHARS = 3000;
@@ -517,6 +517,94 @@ async function annotatePage() {
   return contentCore.createAnnotationSummary(candidates.length, batchResults.flat());
 }
 
+// ── Direct translation mode (bypasses placeholder/delimiter) ──
+var TRANSLATE_CONCURRENCY = 6;
+
+function collectTranslateTargets() {
+  var all = document.querySelectorAll(CANDIDATE_SELECTOR);
+  var targets = [];
+  for (var i = 0; i < all.length; i++) {
+    var el = all[i];
+    if (el.closest(BLOCKED_SELECTOR)) continue;
+    if (!isElementVisible(el)) continue;
+    if (isEditable(el)) continue;
+    if (hasNestedCandidate(el)) continue;
+    var text = (el.textContent || '').trim();
+    if (text.length < 6) continue;
+    if (!/[a-zA-Z]/.test(text)) continue;
+    targets.push(el);
+  }
+  return targets;
+}
+
+async function translateElementDirect(element) {
+  var text = (element.textContent || '').trim();
+  if (text.length < 6) return { status: 'skipped' };
+
+  var hasChildElements = element.querySelector('a, strong, em, b, i, span, sup, sub') !== null;
+  var input = hasChildElements ? element.innerHTML : text;
+
+  try {
+    var response = await sendRuntimeMessage({
+      type: 'NF_TRANSLATE_DIRECT',
+      text: input,
+      preserveHtml: hasChildElements
+    });
+    if (!response || !response.ok || !response.text) {
+      return { status: 'failed', error: response && response.error || 'no response' };
+    }
+    var translated = response.text.trim();
+    if (translated.length < 2) return { status: 'skipped' };
+
+    if (hasChildElements) {
+      element.insertAdjacentHTML('afterbegin', '');
+      var temp = document.createElement('div');
+      temp.insertAdjacentHTML('afterbegin', translated);
+      if (temp.querySelector('a, strong, em, b, i')) {
+        element.replaceChildren.apply(element, Array.from(temp.childNodes));
+      } else {
+        element.textContent = translated;
+      }
+    } else {
+      element.textContent = translated;
+    }
+    return { status: 'success' };
+  } catch (e) {
+    return { status: 'failed', error: e.message || 'unknown' };
+  }
+}
+
+async function translatePageDirect() {
+  var targets = collectTranslateTargets();
+  console.log('[breeze] translatePageDirect: ' + targets.length + ' targets');
+  if (!targets.length) return { total: 0, success: 0, failed: 0 };
+
+  var success = 0, failed = 0;
+  var queue = targets.slice();
+  var active = 0;
+
+  await new Promise(function(resolve) {
+    function next() {
+      while (active < TRANSLATE_CONCURRENCY && queue.length > 0) {
+        active++;
+        var el = queue.shift();
+        translateElementDirect(el).then(function(r) {
+          if (r.status === 'success') success++;
+          else if (r.status === 'failed') failed++;
+          active--;
+          if (queue.length === 0 && active === 0) resolve();
+          else next();
+        });
+      }
+      if (queue.length === 0 && active === 0) resolve();
+    }
+    next();
+  });
+
+  console.log('[breeze] translatePageDirect done: success=' + success + ' failed=' + failed + ' total=' + targets.length);
+  return { total: targets.length, success: success, failed: failed };
+}
+
 console.log('[breeze] content.js message listener registered');
 
 chrome.runtime.onMessage.addListener(function handleMessage(message, _sender, sendResponse) {
@@ -526,9 +614,20 @@ chrome.runtime.onMessage.addListener(function handleMessage(message, _sender, se
   }
 
   if (message.dryRun) {
-    console.log('[breeze] dry-run OK');
     sendResponse({ ok: true });
     return false;
+  }
+
+  if (message.directTranslate) {
+    console.log('[breeze] starting translatePageDirect()');
+    translatePageDirect()
+      .then(function(summary) {
+        sendResponse({ ok: true, summary: summary });
+      })
+      .catch(function(error) {
+        sendResponse({ ok: false, error: error.message || '翻译失败' });
+      });
+    return true;
   }
 
   console.log('[breeze] starting annotatePage()');
@@ -545,7 +644,16 @@ chrome.runtime.onMessage.addListener(function handleMessage(message, _sender, se
 
 bindSelectionEvents();
 
-// Auto-annotate removed — use popup button to trigger manually
+// Debug: auto-translate on ?breeze=translate
+if (location.search.includes('breeze=translate')) {
+  setTimeout(function() {
+    translatePageDirect().then(function(s) {
+      console.log('[breeze] DIRECT TRANSLATE:', JSON.stringify(s));
+    }).catch(function(e) {
+      console.error('[breeze] DIRECT TRANSLATE FAILED:', e);
+    });
+  }, 1500);
+}
 
 // ── Audio subtitle overlay ──
 var subtitleOverlay = null;

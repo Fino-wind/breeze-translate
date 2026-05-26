@@ -532,6 +532,13 @@ chrome.runtime.onMessage.addListener(function handleMessage(message, _sender, se
     return true;
   }
 
+  if (message.type === 'NF_TRANSLATE_DIRECT') {
+    translateDirect(message.text, message.preserveHtml)
+      .then(function(result) { sendResponse(result); })
+      .catch(function(error) { sendResponse({ ok: false, error: error.message || '翻译失败' }); });
+    return true;
+  }
+
   if (message.type === core.MESSAGE_TYPES.CLEAR_LOGS) {
     clearLogs()
       .then(function resolveClear() {
@@ -616,4 +623,62 @@ async function toggleAudioCapture(serverUrl) {
 
   chrome.storage.local.set({ breezeAudioActive: true });
   return { ok: true, capturing: true };
+}
+
+async function translateDirect(text, preserveHtml) {
+  var storedState = await getStoredState();
+  var state = core.mergeStoredState(storedState);
+  var mode = (storedState.ui && storedState.ui.mode) || 'full';
+
+  if (!state.settings.baseUrl || !state.settings.model) {
+    return { ok: false, error: '请先配置 API。' };
+  }
+
+  var knownWords = (storedState.vocabulary && storedState.vocabulary.knownWords) || [];
+  // preserveHtml is the second argument
+  var systemPrompt;
+  if (preserveHtml) {
+    if (mode === 'learn' && knownWords.length > 0) {
+      systemPrompt = '翻译以下HTML片段为简体中文。保留所有HTML标签（a, strong, em, sup等）的位置和属性不变，只翻译文本内容。已掌握的英文词保留不翻译：' + knownWords.join(', ') + '。只输出翻译后的HTML。';
+    } else {
+      systemPrompt = '翻译以下HTML片段为简体中文。保留所有HTML标签（a, strong, em, sup等）的位置和属性不变，只翻译文本内容。只输出翻译后的HTML。';
+    }
+  } else {
+    if (mode === 'learn' && knownWords.length > 0) {
+      systemPrompt = '你是翻译工具。规则：\n1. 将英文翻译成简体中文。\n2. 重要例外：以下英文单词由用户标记为已掌握，必须保留英文原文不翻译：' + knownWords.join(', ') + '\n3. 只输出翻译结果。';
+    } else {
+      systemPrompt = '将以下英文翻译成简体中文。只输出翻译，不要解释。';
+    }
+  }
+
+  var headers = { 'Content-Type': 'application/json' };
+  if (state.settings.apiKey) headers.Authorization = 'Bearer ' + state.settings.apiKey;
+
+  var url = core.normalizeBaseUrl(state.settings.baseUrl) + '/chat/completions';
+  var response = await fetch(url, {
+    method: 'POST',
+    headers: headers,
+    body: JSON.stringify({
+      model: state.settings.model,
+      temperature: 0,
+      max_tokens: 2048,
+      chat_template_kwargs: { enable_thinking: false },
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: text }
+      ]
+    })
+  });
+
+  if (!response.ok) {
+    return { ok: false, error: 'HTTP ' + response.status };
+  }
+
+  var data = await response.json();
+  var content = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+  if (!content || !content.trim()) {
+    return { ok: false, error: '模型返回空结果' };
+  }
+
+  return { ok: true, text: content.trim() };
 }
