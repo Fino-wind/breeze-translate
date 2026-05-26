@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "南风译 Breeze Translate",
+  "version": "1.0.1",
+  "description": "Local AI bilingual translator — inline annotation, selection translation, real-time audio translation",
+  "permissions": ["storage", "activeTab", "scripting", "contextMenus", "tabCapture", "offscreen"],
+  "host_permissions": ["https://*/*", "http://*/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "南风译 Breeze Translate",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [{
+    "matches": ["https://*/*", "http://*/*"],
+    "js": ["shared.js", "content.js"],
+    "run_at": "document_idle"
+  }],
+  "options_page": "options.html"
+}

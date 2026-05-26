@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>南风极简注音 - Options</title>
+    <link rel="stylesheet" href="options.css">
+  </head>
+  <body>
+    <main class="page-shell">
+      <section class="hero-strip glass-panel">
+        <div class="hero-copy">
+          <p class="eyebrow">API Configuration Center</p>
+          <h1>南风极简注音</h1>
+          <p class="hero-subtitle">在这里配置你的 Base URL、API Key 和模型名称，兼容 OpenAI 官方接口与本地模型端点。</p>
+        </div>
+        <div class="hero-orb"></div>
+      </section>
+
+      <section class="settings-card">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Model Access</p>
+            <h2>万能大模型 API 配置中心</h2>
+          </div>
+          <span class="save-pill" id="savePill" data-state="idle">未保存</span>
+        </div>
+
+        <form id="settingsForm" class="settings-form">
+          <label class="field">
+            <span>Base URL</span>
+            <input id="baseUrlInput" name="baseUrl" type="url" placeholder="https://api.openai.com/v1">
+          </label>
+
+          <label class="field">
+            <span>API Key</span>
+            <input id="apiKeyInput" name="apiKey" type="password" placeholder="sk-... 或留空以兼容本地模型">
+          </label>
+
+          <label class="field">
+            <span>Model Name</span>
+            <input id="modelInput" name="model" type="text" placeholder="gpt-4o-mini / qwen-max / local-model">
+          </label>
+
+          <div class="button-row">
+            <button id="testConnectionButton" class="secondary-button" type="button">测试连接</button>
+            <button id="saveButton" class="primary-button" type="submit">保存配置</button>
+          </div>
+
+          <div class="connection-banner" id="connectionBanner" data-tone="neutral">保存前可先测试当前配置是否能连通模型。</div>
+        </form>
+
+        <section class="logs-card">
+          <div class="logs-head">
+            <div>
+              <p class="section-kicker">Diagnostics</p>
+              <h3>本地调试日志</h3>
+            </div>
+            <div class="logs-actions">
+              <button id="refreshLogsButton" class="ghost-button" type="button">刷新</button>
+              <button id="clearLogsButton" class="ghost-button" type="button">清空</button>
+            </div>
+          </div>
+          <pre id="logsOutput" class="logs-output">暂无日志。</pre>
+        </section>
+
+        <div class="note-grid">
+          <article class="note-card">
+            <p class="note-title">兼容方式</p>
+            <p class="note-copy">默认请求 `chat/completions`，支持 OpenAI 官方地址，也支持 `http://127.0.0.1:1234/v1` 这类本地兼容接口。</p>
+          </article>
+          <article class="note-card">
+            <p class="note-title">安全提示</p>
+            <p class="note-copy">如果你用本地模型，API Key 可以留空。扩展只会把页面文本发给你配置的接口。</p>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <script src="shared.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>

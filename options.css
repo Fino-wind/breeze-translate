@@ -1,0 +1,355 @@
+:root {
+  color-scheme: light dark;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --bg: #f8fafc;
+  --panel: rgba(255, 255, 255, 0.82);
+  --panel-strong: rgba(255, 255, 255, 0.94);
+  --text: #0f172a;
+  --muted: #6b7280;
+  --accent: #6366f1;
+  --accent-2: #3b82f6;
+  --border: rgba(148, 163, 184, 0.22);
+  --shadow-soft: 0 20px 46px -32px rgba(15, 23, 42, 0.34);
+  --shadow-hero: 0 24px 60px -34px rgba(99, 102, 241, 0.56);
+  --radius-lg: 20px;
+  --radius-md: 16px;
+  --transition: all 0.2s ease-in-out;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #020617;
+    --panel: rgba(15, 23, 42, 0.76);
+    --panel-strong: rgba(15, 23, 42, 0.92);
+    --text: #f8fafc;
+    --muted: #94a3b8;
+    --border: rgba(148, 163, 184, 0.16);
+    --shadow-soft: 0 24px 50px -32px rgba(2, 6, 23, 0.92);
+    --shadow-hero: 0 26px 62px -32px rgba(59, 130, 246, 0.52);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  background:
+    radial-gradient(circle at top left, rgba(99, 102, 241, 0.14), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.12), transparent 36%),
+    var(--bg);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.page-shell {
+  width: min(920px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 48px 0 72px;
+}
+
+.glass-panel,
+.settings-card,
+.note-card,
+.save-pill {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+}
+
+.hero-strip {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  align-items: center;
+  gap: 18px;
+  padding: 28px;
+  border-radius: 28px;
+  backdrop-filter: blur(14px);
+}
+
+.hero-copy h1,
+.section-head h2 {
+  margin: 6px 0 0;
+}
+
+.eyebrow,
+.section-kicker {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.hero-copy h1 {
+  font-size: clamp(32px, 6vw, 44px);
+  line-height: 1;
+}
+
+.hero-subtitle {
+  margin: 14px 0 0;
+  max-width: 560px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.hero-orb {
+  justify-self: end;
+  width: 160px;
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.9), transparent 22%),
+    linear-gradient(135deg, rgba(99, 102, 241, 0.86), rgba(59, 130, 246, 0.72));
+  box-shadow: var(--shadow-hero);
+  filter: saturate(1.08);
+}
+
+.settings-card {
+  margin-top: 24px;
+  padding: 28px;
+  border-radius: 28px;
+  background: var(--panel-strong);
+}
+
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.save-pill {
+  padding: 10px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.save-pill[data-state='saving'] {
+  color: var(--accent);
+  border-color: rgba(99, 102, 241, 0.3);
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.save-pill[data-state='success'] {
+  color: #059669;
+  border-color: rgba(5, 150, 105, 0.28);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.settings-form {
+  margin-top: 22px;
+  display: grid;
+  gap: 16px;
+}
+
+.field {
+  display: grid;
+  gap: 10px;
+}
+
+.field span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.field input {
+  width: 100%;
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.64);
+  color: var(--text);
+  outline: none;
+  transition: var(--transition);
+}
+
+@media (prefers-color-scheme: dark) {
+  .field input {
+    background: rgba(15, 23, 42, 0.74);
+  }
+}
+
+.field input:focus {
+  border-color: rgba(99, 102, 241, 0.42);
+  box-shadow: 0 0 0 5px rgba(99, 102, 241, 0.14);
+}
+
+.button-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.secondary-button,
+.primary-button {
+  border: 0;
+  border-radius: 16px;
+  padding: 14px 22px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.primary-button {
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: var(--shadow-hero);
+}
+
+.secondary-button,
+.ghost-button {
+  color: var(--text);
+  background: rgba(148, 163, 184, 0.14);
+  box-shadow: none;
+}
+
+.secondary-button:hover,
+.primary-button:hover {
+  transform: translateY(-1px);
+}
+
+.secondary-button:active,
+.primary-button:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.primary-button[data-state='saving'] {
+  opacity: 0.85;
+}
+
+.primary-button[data-state='success'] {
+  background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.connection-banner,
+.logs-card {
+  border: 1px solid var(--border);
+  background: rgba(148, 163, 184, 0.08);
+  border-radius: 18px;
+}
+
+.connection-banner {
+  padding: 14px 16px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.connection-banner[data-tone='success'] {
+  color: #059669;
+  border-color: rgba(5, 150, 105, 0.24);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.connection-banner[data-tone='error'] {
+  color: #dc2626;
+  border-color: rgba(220, 38, 38, 0.24);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.logs-card {
+  margin-top: 18px;
+  padding: 18px;
+}
+
+.logs-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.logs-head h3 {
+  margin: 6px 0 0;
+}
+
+.logs-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ghost-button {
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.ghost-button:hover {
+  transform: translateY(-1px);
+}
+
+.logs-output {
+  margin: 16px 0 0;
+  min-height: 180px;
+  max-height: 320px;
+  overflow: auto;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: rgba(15, 23, 42, 0.92);
+  color: #dbeafe;
+  font: 12px/1.6 'SFMono-Regular', 'SF Mono', 'Cascadia Code', Consolas, monospace;
+  white-space: pre-wrap;
+}
+
+.note-grid {
+  margin-top: 22px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.note-card {
+  padding: 18px;
+  border-radius: 20px;
+}
+
+.note-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.note-copy {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+@media (max-width: 720px) {
+  .page-shell {
+    width: min(100% - 20px, 720px);
+    padding: 20px 0 32px;
+  }
+
+  .hero-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-orb {
+    justify-self: start;
+    width: 96px;
+  }
+
+  .settings-card,
+  .hero-strip {
+    padding: 20px;
+  }
+
+  .note-grid {
+    grid-template-columns: 1fr;
+  }
+}

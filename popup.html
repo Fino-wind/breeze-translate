@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>南风译 Breeze Translate</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="popup-shell">
+      <section class="hero-card glass-panel">
+        <div class="hero-mark">NF</div>
+        <div class="hero-copy">
+          <p class="eyebrow">Breeze Translate</p>
+          <h1>南风译</h1>
+          <p class="hero-subtitle">Local AI 双语翻译</p>
+        </div>
+      </section>
+
+      <section class="status-row">
+        <div class="status-banner" id="statusBanner" data-tone="neutral">选择翻译模式，点击开始。</div>
+      </section>
+
+      <section class="word-card">
+        <div class="card-head">
+          <div>
+            <p class="card-kicker">翻译模式</p>
+            <h2>Mode</h2>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;">
+          <button id="modeFullBtn" class="primary-button" type="button" style="flex:1;font-size:13px;">全文翻译</button>
+          <button id="modeLearnBtn" class="secondary-button" type="button" style="flex:1;font-size:13px;">学习模式</button>
+        </div>
+        <p id="modeDesc" style="font-size:12px;color:#8b949e;margin:0;">全文翻译：所有英文翻译成中文。</p>
+      </section>
+
+      <section class="word-card" id="vocabSection" style="display:none;">
+        <div class="card-head">
+          <div>
+            <p class="card-kicker">已掌握的词（划词添加）</p>
+            <h2>词库 <span id="vocabCount" style="font-size:14px;color:#8b949e;">0</span></h2>
+          </div>
+          <button class="ghost-button" type="button" id="clearVocabBtn">清空</button>
+        </div>
+        <ul class="word-list" id="vocabList"></ul>
+      </section>
+
+      <section class="word-card" style="border-left: 3px solid #58a6ff;">
+        <div class="card-head">
+          <div>
+            <p class="card-kicker">语音实时翻译</p>
+            <h2>Audio Translate</h2>
+          </div>
+        </div>
+        <p style="font-size:12px;color:#8b949e;margin-bottom:8px;">捕获标签页音频 → Whisper → Qwen3.6 → 字幕叠加</p>
+        <button id="audioToggleButton" class="primary-button" type="button" style="width:100%;background:#58a6ff;">🎧 开始语音翻译</button>
+        <div id="audioStatus" style="font-size:11px;color:#8b949e;margin-top:6px;text-align:center;"></div>
+      </section>
+
+      <footer class="action-bar">
+        <button id="openOptionsButton" class="secondary-button" type="button">API 设置</button>
+        <button id="annotateButton" class="primary-button" type="button">🚀 开始翻译当前页</button>
+      </footer>
+    </main>
+
+    <script src="shared.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>
