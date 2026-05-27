@@ -17,5 +17,14 @@
     "js": ["shared.js", "content.js"],
     "run_at": "document_idle"
   }],
-  "options_page": "options.html"
+  "options_page": "options.html",
+  "commands": {
+    "translate-page": {
+      "suggested_key": { "default": "Alt+Q" },
+      "description": "翻译当前页"
+    }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'"
+  }
 }

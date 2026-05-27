@@ -42,10 +42,7 @@ body {
   min-width: 400px;
   max-width: 400px;
   min-height: 620px;
-  background:
-    radial-gradient(circle at top left, rgba(99, 102, 241, 0.18), transparent 36%),
-    radial-gradient(circle at top right, rgba(59, 130, 246, 0.14), transparent 30%),
-    var(--bg);
+  background: var(--bg);
   color: var(--text);
 }
 
@@ -77,7 +74,6 @@ input {
   gap: 14px;
   padding: 16px;
   border-radius: 20px;
-  backdrop-filter: blur(12px);
 }
 
 .hero-mark {
@@ -312,7 +308,6 @@ input {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 10px;
-  backdrop-filter: blur(12px);
 }
 
 .secondary-button,

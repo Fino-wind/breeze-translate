@@ -14,58 +14,41 @@ const elements = {
   statusBanner: document.getElementById('statusBanner'),
 };
 
-function sendRuntimeMessage(message) {
-  return new Promise(function resolveMessage(resolve, reject) {
-    chrome.runtime.sendMessage(message, function handleResponse(response) {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-        return;
-      }
+var translatingTabId = null;
 
+function sendRuntimeMessage(message) {
+  return new Promise(function(resolve, reject) {
+    chrome.runtime.sendMessage(message, function(response) {
+      if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
       resolve(response);
     });
   });
 }
 
 function queryActiveTab() {
-  return new Promise(function resolveTab(resolve, reject) {
-    chrome.tabs.query({ active: true, currentWindow: true }, function handleTabs(tabs) {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-        return;
-      }
-
+  return new Promise(function(resolve, reject) {
+    chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+      if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
       resolve(tabs && tabs[0] ? tabs[0] : null);
     });
   });
 }
 
 function sendMessageToTab(tabId, message) {
-  return new Promise(function resolveMessage(resolve, reject) {
-    chrome.tabs.sendMessage(tabId, message, function handleResponse(response) {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-        return;
-      }
-
+  return new Promise(function(resolve, reject) {
+    chrome.tabs.sendMessage(tabId, message, function(response) {
+      if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
       resolve(response);
     });
   });
 }
 
 function executeScripts(tabId, files) {
-  return new Promise(function resolveInjection(resolve, reject) {
+  return new Promise(function(resolve, reject) {
     chrome.scripting.executeScript(
-      {
-        target: { tabId: tabId },
-        files: files,
-      },
-      function handleInjection() {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-          return;
-        }
-
+      { target: { tabId: tabId }, files: files },
+      function() {
+        if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
         resolve();
       }
     );
@@ -83,13 +66,10 @@ async function ensureContentScript(tabId) {
 
 function setBusy(isBusy) {
   popupState.busy = isBusy;
-  elements.annotateButton.disabled = isBusy;
+  elements.annotateButton.disabled = isBusy && !translatingTabId;
   elements.openOptionsButton.disabled = isBusy;
-  document.querySelectorAll('button, input').forEach(function toggleControl(control) {
-    if (control.id === 'annotateButton' || control.id === 'openOptionsButton') {
-      return;
-    }
-
+  document.querySelectorAll('button, input').forEach(function(control) {
+    if (control.id === 'annotateButton' || control.id === 'openOptionsButton') return;
     control.disabled = isBusy;
   });
 }
@@ -102,32 +82,27 @@ function setStatus(message, tone) {
 function renderWordList(listKey, target) {
   const words = popupState.state.vocabulary[listKey];
   const fragment = document.createDocumentFragment();
-
   if (!words.length) {
     const empty = document.createElement('li');
     empty.className = 'empty-state';
     empty.textContent = listKey === 'knownWords' ? '这里留给你已经掌握的词。' : '这里放正在学习的生词。';
     fragment.appendChild(empty);
   } else {
-    words.forEach(function createWordItem(word) {
+    words.forEach(function(word) {
       const item = document.createElement('li');
       item.className = 'word-item';
-
       const label = document.createElement('span');
       label.textContent = word;
       item.appendChild(label);
-
       const removeButton = document.createElement('button');
       removeButton.type = 'button';
       removeButton.textContent = '×';
       removeButton.dataset.removeWord = word;
       removeButton.dataset.listKey = listKey;
       item.appendChild(removeButton);
-
       fragment.appendChild(item);
     });
   }
-
   target.replaceChildren(fragment);
 }
 
@@ -140,42 +115,25 @@ function renderState() {
 }
 
 async function refreshState() {
-  const response = await sendRuntimeMessage({ type: popupCore.MESSAGE_TYPES.GET_STATE });
-  if (!response || !response.ok) {
-    throw new Error(response && response.error ? response.error : '读取状态失败。');
-  }
-
-  popupState.state = response.state;
+  var result = await chrome.storage.local.get(popupCore.STORAGE_KEY);
+  popupState.state = popupCore.mergeStoredState(result[popupCore.STORAGE_KEY]);
   renderState();
 }
 
 async function saveVocabulary(vocabulary) {
-  const response = await sendRuntimeMessage({
-    type: popupCore.MESSAGE_TYPES.SAVE_VOCABULARY,
-    vocabulary: vocabulary,
-  });
-
-  if (!response || !response.ok) {
-    throw new Error(response && response.error ? response.error : '保存词库失败。');
-  }
-
+  const response = await sendRuntimeMessage({ type: popupCore.MESSAGE_TYPES.SAVE_VOCABULARY, vocabulary: vocabulary });
+  if (!response || !response.ok) throw new Error(response && response.error ? response.error : '保存词库失败。');
   popupState.state = response.state;
   renderState();
 }
 
 async function handleWordSubmit(event) {
   event.preventDefault();
-
   const form = event.currentTarget;
   const listKey = form.dataset.listKey;
   const input = form.elements.word;
   const normalizedWord = popupCore.normalizeWord(input.value);
-
-  if (!normalizedWord) {
-    setStatus('请输入一个有效单词。', 'error');
-    return;
-  }
-
+  if (!normalizedWord) { setStatus('请输入一个有效单词。', 'error'); return; }
   const nextVocabulary = popupCore.upsertWord(popupState.state.vocabulary, normalizedWord, listKey);
   await saveVocabulary(nextVocabulary);
   input.value = '';
@@ -184,16 +142,8 @@ async function handleWordSubmit(event) {
 
 async function handleWordListClick(event) {
   const button = event.target.closest('button[data-remove-word]');
-  if (!button) {
-    return;
-  }
-
-  const nextVocabulary = popupCore.removeWord(
-    popupState.state.vocabulary,
-    button.dataset.removeWord,
-    button.dataset.listKey
-  );
-
+  if (!button) return;
+  const nextVocabulary = popupCore.removeWord(popupState.state.vocabulary, button.dataset.removeWord, button.dataset.listKey);
   await saveVocabulary(nextVocabulary);
   setStatus('已移除词条：' + button.dataset.removeWord, 'success');
 }
@@ -202,88 +152,101 @@ async function handleClearList(event) {
   const button = event.currentTarget;
   const listKey = button.dataset.clearList;
   const nextVocabulary = popupCore.clearWordList(popupState.state.vocabulary, listKey);
-
   await saveVocabulary(nextVocabulary);
   setStatus(listKey === 'knownWords' ? '已清空 Known Words。' : '已清空 Learning Words。', 'success');
 }
 
+function enterTranslatingUI(tabId) {
+  translatingTabId = tabId;
+  elements.annotateButton.textContent = '⏹ 停止翻译';
+  elements.annotateButton.disabled = false;
+  chrome.storage.session.set({ breezeTranslating: { tabId: tabId } });
+}
+
+function exitTranslatingUI() {
+  translatingTabId = null;
+  elements.annotateButton.textContent = '🚀 开始翻译当前页';
+  chrome.storage.session.remove('breezeTranslating');
+  setBusy(false);
+}
+
 async function handleAnnotateClick() {
+  if (translatingTabId) {
+    sendMessageToTab(translatingTabId, { type: 'NF_CANCEL_TRANSLATE' }).catch(function(){});
+    setStatus('已停止', 'neutral');
+    exitTranslatingUI();
+    return;
+  }
+
   setBusy(true);
-  setStatus('正在扫描当前页并请求模型注词...', 'neutral');
+  setStatus('正在翻译...', 'neutral');
 
   try {
-    const tab = await queryActiveTab();
-    if (!tab || typeof tab.id !== 'number') {
-      throw new Error('没有找到可用的标签页。');
-    }
-
+    var tab = await queryActiveTab();
+    if (!tab || typeof tab.id !== 'number') throw new Error('没有找到可用的标签页。');
+    enterTranslatingUI(tab.id);
     await ensureContentScript(tab.id);
-
-    const response = await sendMessageToTab(tab.id, {
+    var response = await sendMessageToTab(tab.id, {
       type: popupCore.MESSAGE_TYPES.START_ANNOTATION,
       directTranslate: true,
     });
-
-    if (!response || !response.ok) {
-      throw new Error(response && response.error ? response.error : '当前页面无法注词。');
-    }
-
-    const summary = response.summary;
-    const firstError = summary.errors && summary.errors.length ? ' 首个错误：' + summary.errors[0] : '';
+    if (!response || !response.ok) throw new Error(response && response.error ? response.error : '翻译失败。');
+    var summary = response.summary;
     setStatus(
-      '已完成：共扫描 ' + summary.total + ' 段，成功 ' + summary.success + '，跳过 ' + summary.skipped + '，失败 ' + summary.failed + '。' + firstError,
+      '完成：' + summary.success + ' 段成功' + (summary.failed ? '，' + summary.failed + ' 段失败' : ''),
       summary.failed ? 'error' : 'success'
     );
   } catch (error) {
-    setStatus(error && error.message ? error.message : '当前页面暂时无法注词。', 'error');
+    setStatus(error && error.message ? error.message : '翻译失败。', 'error');
   } finally {
-    setBusy(false);
+    exitTranslatingUI();
   }
 }
 
 function bindEvents() {
-  document.querySelectorAll('.word-form').forEach(function bindForm(form) {
-    form.addEventListener('submit', function onSubmit(event) {
-      handleWordSubmit(event).catch(function handleError(error) {
+  document.querySelectorAll('.word-form').forEach(function(form) {
+    form.addEventListener('submit', function(event) {
+      handleWordSubmit(event).catch(function(error) {
         setStatus(error && error.message ? error.message : '保存词库失败。', 'error');
       });
     });
   });
 
   if (elements.knownWordsList) {
-    elements.knownWordsList.addEventListener('click', function onListClick(event) {
-      handleWordListClick(event).catch(function handleError(error) {
+    elements.knownWordsList.addEventListener('click', function(event) {
+      handleWordListClick(event).catch(function(error) {
         setStatus(error && error.message ? error.message : '删除词条失败。', 'error');
       });
     });
   }
 
   if (elements.learningWordsList) {
-    elements.learningWordsList.addEventListener('click', function onListClick(event) {
-      handleWordListClick(event).catch(function handleError(error) {
+    elements.learningWordsList.addEventListener('click', function(event) {
+      handleWordListClick(event).catch(function(error) {
         setStatus(error && error.message ? error.message : '删除词条失败。', 'error');
       });
     });
   }
 
-  document.querySelectorAll('[data-clear-list]').forEach(function bindClearButton(button) {
-    button.addEventListener('click', function onClearClick() {
-      handleClearList({ currentTarget: button }).catch(function handleError(error) {
+  document.querySelectorAll('[data-clear-list]').forEach(function(button) {
+    button.addEventListener('click', function() {
+      handleClearList({ currentTarget: button }).catch(function(error) {
         setStatus(error && error.message ? error.message : '清空词库失败。', 'error');
       });
     });
   });
 
-  elements.openOptionsButton.addEventListener('click', function openOptions() {
+  elements.openOptionsButton.addEventListener('click', function() {
     chrome.runtime.openOptionsPage();
   });
 
-  elements.annotateButton.addEventListener('click', function onAnnotateClick() {
+  elements.annotateButton.addEventListener('click', function() {
     handleAnnotateClick();
   });
 }
 
-// ── Mode switching ──
+// ── Mode switching (saves through background for consistency) ──
+
 var modeFullBtn = document.getElementById('modeFullBtn');
 var modeLearnBtn = document.getElementById('modeLearnBtn');
 var modeDesc = document.getElementById('modeDesc');
@@ -307,76 +270,63 @@ function setMode(mode) {
     if (vocabSection) vocabSection.style.display = '';
     renderVocab();
   }
-  chrome.storage.local.get(popupCore.STORAGE_KEY, function(r) {
-    var state = r[popupCore.STORAGE_KEY] || {};
-    if (!state.ui) state.ui = {};
-    state.ui.mode = mode;
-    chrome.storage.local.set({ [popupCore.STORAGE_KEY]: state });
-  });
+}
+
+function saveModeToBackground(mode) {
+  sendRuntimeMessage({ type: popupCore.MESSAGE_TYPES.SAVE_UI, ui: { mode: mode } }).catch(function() {});
 }
 
 function renderVocab() {
-  chrome.storage.local.get(popupCore.STORAGE_KEY, function(r) {
-    var state = r[popupCore.STORAGE_KEY] || {};
-    var words = (state.vocabulary && state.vocabulary.knownWords) || [];
-    if (vocabCount) vocabCount.textContent = words.length;
-    if (!vocabList) return;
-    vocabList.textContent = '';
-    words.forEach(function(w) {
-      var li = document.createElement('li');
-      li.textContent = w;
-      var del = document.createElement('button');
-      del.textContent = '×';
-      del.className = 'ghost-button';
-      del.style.marginLeft = '8px';
-      del.addEventListener('click', function() { removeVocabWord(w); });
-      li.appendChild(del);
-      vocabList.appendChild(li);
-    });
+  var words = (popupState.state.vocabulary && popupState.state.vocabulary.knownWords) || [];
+  if (vocabCount) vocabCount.textContent = words.length;
+  if (!vocabList) return;
+  vocabList.textContent = '';
+  words.forEach(function(w) {
+    var li = document.createElement('li');
+    li.textContent = w;
+    var del = document.createElement('button');
+    del.textContent = '×';
+    del.className = 'ghost-button';
+    del.style.marginLeft = '8px';
+    del.addEventListener('click', function() { removeVocabWord(w); });
+    li.appendChild(del);
+    vocabList.appendChild(li);
   });
 }
 
 function removeVocabWord(word) {
-  chrome.storage.local.get(popupCore.STORAGE_KEY, function(r) {
-    var state = r[popupCore.STORAGE_KEY] || {};
-    if (state.vocabulary && state.vocabulary.knownWords) {
-      state.vocabulary.knownWords = state.vocabulary.knownWords.filter(function(w) { return w !== word; });
-      chrome.storage.local.set({ [popupCore.STORAGE_KEY]: state }, renderVocab);
-    }
-  });
+  sendRuntimeMessage({ type: popupCore.MESSAGE_TYPES.GET_STATE })
+    .then(function(r) {
+      if (!r || !r.ok) return;
+      var vocab = popupCore.removeWord(r.state.vocabulary, word, 'knownWords');
+      return sendRuntimeMessage({ type: popupCore.MESSAGE_TYPES.SAVE_VOCABULARY, vocabulary: vocab });
+    })
+    .then(function() { renderVocab(); })
+    .catch(function() {});
 }
 
-if (modeFullBtn) modeFullBtn.addEventListener('click', function() { setMode('full'); });
-if (modeLearnBtn) modeLearnBtn.addEventListener('click', function() { setMode('learn'); });
+if (modeFullBtn) modeFullBtn.addEventListener('click', function() { setMode('full'); saveModeToBackground('full'); });
+if (modeLearnBtn) modeLearnBtn.addEventListener('click', function() { setMode('learn'); saveModeToBackground('learn'); });
 if (clearVocabBtn) clearVocabBtn.addEventListener('click', function() {
-  chrome.storage.local.get(popupCore.STORAGE_KEY, function(r) {
-    var state = r[popupCore.STORAGE_KEY] || {};
-    if (state.vocabulary) state.vocabulary.knownWords = [];
-    chrome.storage.local.set({ [popupCore.STORAGE_KEY]: state }, renderVocab);
-  });
+  var vocab = popupCore.clearWordList(popupState.state.vocabulary, 'knownWords');
+  saveVocabulary(vocab).then(function() { renderVocab(); }).catch(function() {});
 });
 
-chrome.storage.local.get(popupCore.STORAGE_KEY, function(r) {
-  var state = r[popupCore.STORAGE_KEY] || {};
-  var savedMode = (state.ui && state.ui.mode) || 'full';
-  setMode(savedMode);
+// ── Progress listener ──
+
+chrome.runtime.onMessage.addListener(function(msg) {
+  if (msg.type === 'NF_TRANSLATE_PROGRESS' && translatingTabId) {
+    setStatus('翻译中... ' + msg.done + ' / ' + msg.total, 'neutral');
+  }
 });
 
 // ── Audio ──
+
 var audioBtn = document.getElementById('audioToggleButton');
 var audioSt = document.getElementById('audioStatus');
 var audioOn = false;
 
 if (audioBtn) {
-  chrome.runtime.sendMessage({ type: 'NF_AUDIO_STATE' }, function(r) {
-    if (r && r.capturing) {
-      audioOn = true;
-      audioBtn.textContent = '⏹ 停止语音翻译';
-      audioBtn.style.background = '#f85149';
-      audioSt.textContent = '翻译中...';
-    }
-  });
-
   audioBtn.addEventListener('click', function() {
     var serverUrl = 'http://192.168.8.104:9090';
     chrome.storage.local.get('nanfengAudioServer', function(r) {
@@ -395,11 +345,51 @@ if (audioBtn) {
   });
 }
 
-async function bootPopup() {
-  bindEvents();
-  await refreshState();
+async function restoreTranslationState() {
+  try {
+    var session = await chrome.storage.session.get('breezeTranslating');
+    if (session && session.breezeTranslating && session.breezeTranslating.tabId) {
+      var tab = await queryActiveTab();
+      if (tab && tab.id === session.breezeTranslating.tabId) {
+        enterTranslatingUI(tab.id);
+        setStatus('翻译进行中...', 'neutral');
+      } else {
+        chrome.storage.session.remove('breezeTranslating');
+      }
+    }
+  } catch(e) {}
 }
 
-bootPopup().catch(function handleBootError(error) {
+async function bootPopup() {
+  bindEvents();
+
+  var audioPromise = audioBtn
+    ? new Promise(function(resolve) {
+        chrome.runtime.sendMessage({ type: 'NF_AUDIO_STATE' }, function(r) {
+          if (chrome.runtime.lastError) { resolve(null); return; }
+          resolve(r);
+        });
+      })
+    : Promise.resolve(null);
+
+  var results = await Promise.all([
+    refreshState(),
+    restoreTranslationState(),
+    audioPromise
+  ]);
+
+  var savedMode = (popupState.state.ui && popupState.state.ui.mode) || 'full';
+  setMode(savedMode);
+
+  var audioResult = results[2];
+  if (audioResult && audioResult.capturing && audioBtn) {
+    audioOn = true;
+    audioBtn.textContent = '⏹ 停止语音翻译';
+    audioBtn.style.background = '#f85149';
+    if (audioSt) audioSt.textContent = '翻译中...';
+  }
+}
+
+bootPopup().catch(function(error) {
   setStatus(error && error.message ? error.message : 'Popup 初始化失败。', 'error');
 });
