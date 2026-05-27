@@ -16,8 +16,32 @@ const TEST_CONNECTION_VOCABULARY = {
 let logWriteQueue = Promise.resolve();
 let stateWriteQueue = Promise.resolve();
 const selectionTranslationCache = new Map();
-const directTranslationCache = new Map();
-const DIRECT_CACHE_MAX = 200;
+let directTranslationCache = new Map();
+const DIRECT_CACHE_MAX = 500;
+const DIRECT_CACHE_SESSION_KEY = 'breezeDirectCache';
+let cacheWriteTimer = null;
+
+function persistCacheToSession() {
+  if (cacheWriteTimer) clearTimeout(cacheWriteTimer);
+  cacheWriteTimer = setTimeout(function() {
+    var obj = {};
+    directTranslationCache.forEach(function(v, k) { obj[k] = v; });
+    chrome.storage.session.set({ [DIRECT_CACHE_SESSION_KEY]: obj }).catch(function() {});
+    cacheWriteTimer = null;
+  }, 500);
+}
+
+async function loadCacheFromSession() {
+  try {
+    var r = await chrome.storage.session.get(DIRECT_CACHE_SESSION_KEY);
+    var obj = r && r[DIRECT_CACHE_SESSION_KEY];
+    if (obj && typeof obj === 'object') {
+      Object.keys(obj).forEach(function(k) { directTranslationCache.set(k, obj[k]); });
+    }
+  } catch(e) {}
+}
+
+loadCacheFromSession();
 const CONTEXT_MENU_KNOWN = 'nanfeng-add-known';
 const CONTEXT_MENU_LEARNING = 'nanfeng-add-learning';
 
@@ -65,6 +89,7 @@ function pruneDirectCache() {
   while (directTranslationCache.size > DIRECT_CACHE_MAX) {
     directTranslationCache.delete(directTranslationCache.keys().next().value);
   }
+  persistCacheToSession();
 }
 
 async function addWordToVocabulary(word, listKey) {
@@ -696,23 +721,37 @@ chrome.runtime.onMessage.addListener(function handleMessage(message, _sender, se
 
 // ── Audio capture ──
 
+async function ensureContentScriptInTab(tabId) {
+  try {
+    await chrome.tabs.sendMessage(tabId, { type: core.MESSAGE_TYPES.START_ANNOTATION, dryRun: true });
+  } catch(e) {
+    await chrome.scripting.executeScript({ target: { tabId: tabId }, files: ['shared.js', 'content.js'] });
+    await new Promise(function(r) { setTimeout(r, 200); });
+  }
+}
+
 chrome.commands.onCommand.addListener(function(command) {
-  if (command === 'translate-page') {
-    chrome.tabs.query({ active: true, currentWindow: true }, async function(tabs) {
-      if (!tabs || !tabs[0] || !tabs[0].id) return;
-      var tabId = tabs[0].id;
-      try {
-        await chrome.tabs.sendMessage(tabId, { type: core.MESSAGE_TYPES.START_ANNOTATION, dryRun: true });
-      } catch(e) {
-        await chrome.scripting.executeScript({ target: { tabId: tabId }, files: ['shared.js', 'content.js'] });
-        await new Promise(function(r) { setTimeout(r, 200); });
-      }
+  chrome.tabs.query({ active: true, currentWindow: true }, async function(tabs) {
+    if (!tabs || !tabs[0] || !tabs[0].id) return;
+    var tabId = tabs[0].id;
+
+    if (command === 'translate-page') {
+      await ensureContentScriptInTab(tabId);
       chrome.tabs.sendMessage(tabId, {
         type: core.MESSAGE_TYPES.START_ANNOTATION,
         directTranslate: true
       }).catch(function() {});
-    });
-  }
+    }
+
+    if (command === 'toggle-translate') {
+      chrome.tabs.sendMessage(tabId, { type: 'NF_TOGGLE_TRANSLATE' }).catch(function() {});
+    }
+
+    if (command === 'input-translate') {
+      await ensureContentScriptInTab(tabId);
+      chrome.tabs.sendMessage(tabId, { type: 'NF_INPUT_TRANSLATE' }).catch(function() {});
+    }
+  });
 });
 
 async function toggleAudioCapture(serverUrl) {

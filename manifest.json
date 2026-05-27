@@ -20,8 +20,16 @@
   "options_page": "options.html",
   "commands": {
     "translate-page": {
-      "suggested_key": { "default": "Alt+Q" },
+      "suggested_key": { "default": "Alt+Q", "mac": "MacCtrl+Q" },
       "description": "翻译当前页"
+    },
+    "toggle-translate": {
+      "suggested_key": { "default": "Alt+C", "mac": "MacCtrl+C" },
+      "description": "切换翻译/原文"
+    },
+    "input-translate": {
+      "suggested_key": { "default": "Alt+I", "mac": "MacCtrl+I" },
+      "description": "翻译输入框内容"
     }
   },
   "content_security_policy": {

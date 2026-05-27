@@ -7,9 +7,9 @@ var contentCore = globalThis.NanFengCore;
 var CANDIDATE_SELECTOR = 'article, main, section, blockquote, p, li, td, th, figcaption, h1, h2, h3, h4, h5, h6, div, dd, dt, details, summary';
 var BLOCKED_SELECTOR = 'script, style, code, pre, textarea, input, noscript, button, nav, svg, canvas, video, audio';
 var SELECTION_CARD_ID = 'nanfeng-selection-card';
-var TRANSLATE_BATCH_SIZE = 5;
-var TRANSLATE_BATCH_CHARS = 2500;
-var TRANSLATE_CONCURRENCY = 3;
+var TRANSLATE_BATCH_SIZE = 8;
+var TRANSLATE_BATCH_CHARS = 3000;
+var TRANSLATE_CONCURRENCY = 6;
 
 var selectionCard = null;
 var selectionHideTimer = 0;
@@ -271,10 +271,14 @@ async function translatePageDirect() {
 
   var items = [];
   for (var i = 0; i < targets.length; i++) {
+    var hasChildren = targets[i].children.length > 0;
+    var sourceText = hasChildren ? targets[i].innerHTML : targets[i].textContent.trim();
+    targets[i].setAttribute('data-breeze-original', sourceText);
+    targets[i].setAttribute('data-breeze-html', hasChildren ? '1' : '0');
     items.push({
       el: targets[i],
-      text: targets[i].textContent.trim(),
-      preserveHtml: false
+      text: sourceText,
+      preserveHtml: hasChildren
     });
   }
 
@@ -310,7 +314,11 @@ async function translatePageDirect() {
               if (runId !== activeDirectRunId) return;
               var translated = response.texts[j];
               if (!translated || !translated.trim()) { failed++; continue; }
-              batch[j].el.textContent = translated.trim();
+              if (batch[j].preserveHtml) {
+                batch[j].el.innerHTML = translated.trim();
+              } else {
+                batch[j].el.textContent = translated.trim();
+              }
               success++;
             }
           } else {
@@ -341,10 +349,58 @@ chrome.runtime.onMessage.addListener(function(msg) {
   if (msg && msg.type === 'NF_STREAM_SEGMENT') {
     var batch = streamBatchMap[msg.batchId];
     if (batch && batch[msg.index]) {
-      batch[msg.index].el.textContent = msg.text;
+      if (batch[msg.index].preserveHtml) {
+        batch[msg.index].el.innerHTML = msg.text;
+      } else {
+        batch[msg.index].el.textContent = msg.text;
+      }
     }
   }
 });
+
+function toggleTranslation() {
+  var elements = document.querySelectorAll('[data-breeze-original]');
+  elements.forEach(function(el) {
+    var original = el.getAttribute('data-breeze-original');
+    var isHtml = el.getAttribute('data-breeze-html') === '1';
+    var current = isHtml ? el.innerHTML : el.textContent;
+    el.setAttribute('data-breeze-original', current);
+    if (isHtml) {
+      el.innerHTML = original;
+    } else {
+      el.textContent = original;
+    }
+  });
+  return elements.length;
+}
+
+async function translateInputBox() {
+  var el = document.activeElement;
+  if (!el) return { ok: false, error: '没有聚焦的输入框' };
+  var isContentEditable = el.isContentEditable;
+  var isInput = el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && el.type === 'text');
+  if (!isContentEditable && !isInput) return { ok: false, error: '当前聚焦元素不是输入框' };
+
+  var text = isContentEditable ? el.innerText : el.value;
+  if (!text || !text.trim()) return { ok: false, error: '输入框为空' };
+
+  var response = await sendRuntimeMessage({
+    type: 'NF_TRANSLATE_DIRECT',
+    text: text.trim(),
+    preserveHtml: false
+  });
+
+  if (response && response.ok && response.text) {
+    if (isContentEditable) {
+      el.innerText = response.text;
+    } else {
+      el.value = response.text;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    return { ok: true };
+  }
+  return { ok: false, error: (response && response.error) || '翻译失败' };
+}
 
 chrome.runtime.onMessage.addListener(function(message, _sender, sendResponse) {
   if (!message) return false;
@@ -353,6 +409,19 @@ chrome.runtime.onMessage.addListener(function(message, _sender, sendResponse) {
     activeDirectRunId++;
     sendResponse({ ok: true });
     return false;
+  }
+
+  if (message.type === 'NF_TOGGLE_TRANSLATE') {
+    var count = toggleTranslation();
+    sendResponse({ ok: true, count: count });
+    return false;
+  }
+
+  if (message.type === 'NF_INPUT_TRANSLATE') {
+    translateInputBox()
+      .then(function(result) { sendResponse(result); })
+      .catch(function(e) { sendResponse({ ok: false, error: e.message || '输入框翻译失败' }); });
+    return true;
   }
 
   if (message.type === contentCore.MESSAGE_TYPES.START_ANNOTATION) {
